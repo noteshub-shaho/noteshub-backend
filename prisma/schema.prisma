@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String
+  email         String    @unique
+  password      String?
+  authProvider  String    @default("local")
+  isVerified    Boolean   @default(false)
+  isLoggedIn    Boolean   @default(false)
+  token         String?
+  otp           String?
+  otpExpiry     DateTime?
+  termsAccepted Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions  Session[]
+  donations Donation[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Donation {
+  id                  String    @id @default(cuid())
+  userId              String?
+  razorpayOrderId     String    @unique
+  razorpayPaymentId   String?   @unique
+  amount              Int
+  currency            String    @default("INR")
+  status              String    @default("created")
+  paymentMethod       String?
+  webhookProcessedAt  DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model WebhookEvent {
+  id            String    @id @default(cuid())
+  razorpayEventId String  @unique
+  eventType     String
+  processed     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+}
