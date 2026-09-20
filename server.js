@@ -19,6 +19,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "https://noteshub-shaho.onrender.com",
+  "https://noteshub-admin.onrender.com",
 
   process.env.FRONTEND_URL,
 ].filter(Boolean);
