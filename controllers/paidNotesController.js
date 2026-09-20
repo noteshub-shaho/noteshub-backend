@@ -239,10 +239,6 @@ export const checkEntitlement = async (req, res) => {
       return res.status(400).json({ success: false, message: "noteKey is required" });
     }
 
-    if (!deviceToken) {
-      return res.status(403).json({ success: false, message: "Device token missing" });
-    }
-
     const entitlement = await prisma.noteEntitlement.findUnique({
       where: { userId_noteKey: { userId, noteKey } },
       include: { registeredDevice: true },
@@ -254,6 +250,21 @@ export const checkEntitlement = async (req, res) => {
 
     if (!entitlement.registeredDevice) {
       return res.status(403).json({ success: false, message: "Device not authorized" });
+    }
+
+    if (!deviceToken) {
+      if (!deviceFingerprint || entitlement.registeredDevice.fingerprint !== deviceFingerprint) {
+        return res.status(403).json({ success: false, message: "Device not authorized" });
+      }
+      await prisma.registeredDevice.update({
+        where: { entitlementId: entitlement.id },
+        data: { lastSeenAt: new Date() },
+      });
+      return res.status(200).json({
+        success: true,
+        hasAccess: true,
+        deviceToken: entitlement.registeredDevice.deviceToken,
+      });
     }
 
     if (entitlement.registeredDevice.deviceToken !== deviceToken) {
