@@ -19,6 +19,17 @@ import {
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
+router.post("/login", (req, res) => {
+  const { username, password } = req.body;
+  if (
+    username === process.env.ADMIN_USERNAME &&
+    password === process.env.ADMIN_PASSWORD
+  ) {
+    return res.status(200).json({ success: true });
+  }
+  return res.status(403).json({ success: false, message: "Invalid email or password" });
+});
+
 router.post("/upload", isAdmin, upload.single("file"), adminUpload);
 router.get("/folders", isAdmin, adminListFolders);
 router.get("/cloudinary/files", isAdmin, adminListCloudinaryFiles);
