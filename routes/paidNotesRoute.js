@@ -8,6 +8,7 @@ import {
   verifyPurchase,
   checkEntitlement,
   getSignedAccess,
+  streamPaidFile,
   adminCreatePaidNote,
   adminUpdatePaidNote,
   adminDeletePaidNote,
@@ -24,6 +25,7 @@ router.post("/purchase/create-order", isAuthenticated, createPurchaseOrder);
 router.post("/purchase/verify", isAuthenticated, verifyPurchase);
 router.get("/entitlement/*", isAuthenticated, checkEntitlement);
 router.get("/access/*", isAuthenticated, getSignedAccess);
+router.get("/stream/*/file/:fileName", isAuthenticated, streamPaidFile);
 
 router.get("/admin/list", isAdmin, adminListPaidNotes);
 router.post("/admin/create", isAdmin, adminCreatePaidNote);

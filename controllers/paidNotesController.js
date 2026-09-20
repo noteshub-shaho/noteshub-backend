@@ -405,6 +405,93 @@ export const getSignedAccess = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };  
+export const streamPaidFile = async (req, res) => {
+  try {
+    const noteKey = req.params[0];
+    const fileName = req.params.fileName;
+    const userId = req.userId;
+    const deviceToken = req.headers["x-device-token"];
+    const deviceFingerprint = req.headers["x-device-fingerprint"];
+
+    if (!noteKey || !fileName || !deviceToken) {
+      return res.status(400).json({ success: false, message: "Missing required params" });
+    }
+
+    const config = await prisma.paidNoteConfig.findUnique({ where: { noteKey } });
+    if (!config || !config.isEnabled) {
+      return res.status(404).json({ success: false, message: "Note not found" });
+    }
+
+    const entitlement = await prisma.noteEntitlement.findUnique({
+      where: { userId_noteKey: { userId, noteKey } },
+      include: { registeredDevice: true },
+    });
+
+    if (!entitlement) return res.status(403).json({ success: false, message: "No entitlement" });
+    if (!entitlement.registeredDevice) return res.status(403).json({ success: false, message: "Device not authorized" });
+    if (entitlement.registeredDevice.deviceToken !== deviceToken) return res.status(403).json({ success: false, message: "Device not authorized" });
+    if (deviceFingerprint && entitlement.registeredDevice.fingerprint !== deviceFingerprint) return res.status(403).json({ success: false, message: "Device not authorized" });
+
+    await prisma.registeredDevice.update({
+      where: { entitlementId: entitlement.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    const cloudinaryFolder = `noteshub/${noteKey}`;
+    let targetResource = null;
+
+    try {
+      const result = await cloudinary.api.resources_by_asset_folder(cloudinaryFolder, {
+        max_results: 50,
+        resource_type: "image",
+      });
+      targetResource = (result.resources || []).find((r) => {
+        const resName = (r.display_name || r.public_id.split("/").pop()).replace(/\.pdf$/i, "");
+        return resName === fileName || r.public_id.split("/").pop() === fileName;
+      });
+    } catch {}
+
+    if (targetResource) {
+      const expiresAt = Math.floor(Date.now() / 1000) + 60;
+      const signedUrl = cloudinary.url(targetResource.public_id, {
+        resource_type: "image",
+        type: "upload",
+        sign_url: true,
+        expires_at: expiresAt,
+        secure: true,
+      });
+
+      const upstream = await fetch(signedUrl);
+      if (!upstream.ok) return res.status(502).json({ success: false, message: "Failed to fetch file" });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+
+      const buffer = await upstream.arrayBuffer();
+      return res.send(Buffer.from(buffer));
+    }
+
+    const supabasePath = `${noteKey}/${fileName}.pdf`;
+    const { data, error } = await supabase.storage.from("notes").createSignedUrl(supabasePath, 60);
+    if (error || !data?.signedUrl) return res.status(404).json({ success: false, message: "File not found" });
+
+    const upstream = await fetch(data.signedUrl);
+    if (!upstream.ok) return res.status(502).json({ success: false, message: "Failed to fetch file" });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    const buffer = await upstream.arrayBuffer();
+    return res.send(Buffer.from(buffer));
+  } catch {
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 export const adminCreatePaidNote = async (req, res) => {
   try {
     const { noteKey, title, price, isEnabled } = req.body;
