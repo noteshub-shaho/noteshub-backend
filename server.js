@@ -9,6 +9,7 @@ import termsRoutes from "./routes/termsRoutes.js";
 import adminRoute from "./routes/adminRoute.js";
 import donationRoute from "./routes/donationRoute.js";
 import googleAuthRoute from "./routes/googleAuthRoute.js";
+import paidNotesRoute from "./routes/paidNotesRoute.js";
 
 const app = express();
 
@@ -31,7 +32,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "username", "password"],
+  allowedHeaders: ["Content-Type", "Authorization", "username", "password", "x-device-fingerprint"],
 };
 
 app.options("*", cors(corsOptions));
@@ -63,6 +64,7 @@ app.use("/api/notes", notesRoute);
 app.use("/api/terms", termsRoutes);
 app.use("/api/admin", adminRoute);
 app.use("/api/donations", donationRoute);
+app.use("/api/paid-notes", paidNotesRoute);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
