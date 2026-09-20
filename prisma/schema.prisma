@@ -107,6 +107,7 @@ model RegisteredDevice {
   id            String   @id @default(cuid())
   entitlementId String   @unique
   fingerprint   String
+  deviceToken   String   @unique @default(cuid())
   registeredAt  DateTime @default(now())
   lastSeenAt    DateTime @default(now())
   resetAt       DateTime?

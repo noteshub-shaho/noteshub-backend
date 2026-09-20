@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 import { v2 as cloudinary } from "cloudinary";
 import prisma from "../lib/prisma.js";
 
+const generateDeviceToken = () => crypto.randomBytes(32).toString("hex");
+
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -199,6 +201,8 @@ export const verifyPurchase = async (req, res) => {
       return res.status(200).json({ success: true, message: "Already owns this note" });
     }
 
+    const newDeviceToken = generateDeviceToken();
+
     await prisma.$transaction(async (tx) => {
       await tx.purchaseOrder.update({
         where: { razorpayOrderId: razorpay_order_id },
@@ -213,11 +217,12 @@ export const verifyPurchase = async (req, res) => {
         data: {
           entitlementId: entitlement.id,
           fingerprint: deviceFingerprint,
+          deviceToken: newDeviceToken,
         },
       });
     });
 
-    return res.status(200).json({ success: true, message: "Purchase verified. Access granted." });
+    return res.status(200).json({ success: true, message: "Purchase verified. Access granted.", deviceToken: newDeviceToken });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Verification error" });
   }
@@ -227,14 +232,15 @@ export const checkEntitlement = async (req, res) => {
   try {
     const noteKey = req.params[0];
     const userId = req.userId;
+    const deviceToken = req.headers["x-device-token"];
     const deviceFingerprint = req.headers["x-device-fingerprint"];
 
     if (!noteKey) {
       return res.status(400).json({ success: false, message: "noteKey is required" });
     }
 
-    if (!deviceFingerprint) {
-      return res.status(400).json({ success: false, message: "Device fingerprint missing" });
+    if (!deviceToken) {
+      return res.status(403).json({ success: false, message: "Device token missing" });
     }
 
     const entitlement = await prisma.noteEntitlement.findUnique({
@@ -243,14 +249,18 @@ export const checkEntitlement = async (req, res) => {
     });
 
     if (!entitlement) {
-      return res.status(403).json({ success: false, message: "No entitlement found" });
+      return res.status(403).json({ success: false, message: "No entitlement" });
     }
 
     if (!entitlement.registeredDevice) {
-      return res.status(403).json({ success: false, message: "No registered device found" });
+      return res.status(403).json({ success: false, message: "Device not authorized" });
     }
 
-    if (entitlement.registeredDevice.fingerprint !== deviceFingerprint) {
+    if (entitlement.registeredDevice.deviceToken !== deviceToken) {
+      return res.status(403).json({ success: false, message: "Device not authorized" });
+    }
+
+    if (deviceFingerprint && entitlement.registeredDevice.fingerprint !== deviceFingerprint) {
       return res.status(403).json({ success: false, message: "Device not authorized" });
     }
 
@@ -271,8 +281,8 @@ export const getSignedAccess = async (req, res) => {
     const userId = req.userId;
     const deviceFingerprint = req.headers["x-device-fingerprint"];
 
-    if (!noteKey || !deviceFingerprint) {
-      return res.status(400).json({ success: false, message: "Missing noteKey or device fingerprint" });
+    if (!noteKey) {
+      return res.status(400).json({ success: false, message: "noteKey is required" });
     }
 
     const config = await prisma.paidNoteConfig.findUnique({
@@ -281,6 +291,12 @@ export const getSignedAccess = async (req, res) => {
 
     if (!config || !config.isEnabled) {
       return res.status(404).json({ success: false, message: "Note not found" });
+    }
+
+    const deviceToken = req.headers["x-device-token"];
+
+    if (!deviceToken) {
+      return res.status(403).json({ success: false, message: "Device token missing" });
     }
 
     const entitlement = await prisma.noteEntitlement.findUnique({
@@ -292,7 +308,15 @@ export const getSignedAccess = async (req, res) => {
       return res.status(403).json({ success: false, message: "No entitlement" });
     }
 
-    if (!entitlement.registeredDevice || entitlement.registeredDevice.fingerprint !== deviceFingerprint) {
+    if (!entitlement.registeredDevice) {
+      return res.status(403).json({ success: false, message: "Device not authorized" });
+    }
+
+    if (entitlement.registeredDevice.deviceToken !== deviceToken) {
+      return res.status(403).json({ success: false, message: "Device not authorized" });
+    }
+
+    if (deviceFingerprint && entitlement.registeredDevice.fingerprint !== deviceFingerprint) {
       return res.status(403).json({ success: false, message: "Device not authorized" });
     }
 
