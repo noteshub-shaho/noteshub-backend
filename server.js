@@ -10,14 +10,19 @@ import adminRoute from "./routes/adminRoute.js";
 import donationRoute from "./routes/donationRoute.js";
 import googleAuthRoute from "./routes/googleAuthRoute.js";
 import paidNotesRoute from "./routes/paidNotesRoute.js";
+import academicRoutes from "./routes/academicRoutes.js";
 
 const app = express();
 
 const allowedOrigins = [
-  "https://noteshub-five.vercel.app",
   "https://noteshub-admin.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
+  // Local Expo / Metro bundlers (web + devtools). Native apps don't send
+  // Origin, so these entries only affect browser-based development.
+  "http://localhost:8081",
+  "http://localhost:19000",
+  "http://localhost:19006",
   "https://noteshub-shaho.onrender.com",
   "https://noteshub-admin.onrender.com",
 
@@ -67,6 +72,7 @@ app.use("/api/terms", termsRoutes);
 app.use("/api/admin", adminRoute);
 app.use("/api/donations", donationRoute);
 app.use("/api/paid-notes", paidNotesRoute);
+app.use("/api/academic", academicRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });

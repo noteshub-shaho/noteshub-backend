@@ -44,3 +44,8 @@ Thumbs.db
 # Optional
 *.swp
 /generated/prisma
+
+serviceAccountKey.json
+.env
+.env.local
+.env*

@@ -36,6 +36,27 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model OtpCode {
+  id                  String    @id @default(cuid())
+  email               String
+  purpose             String
+  codeHash            String
+  expiresAt           DateTime
+  attempts            Int       @default(0)
+  maxAttempts         Int       @default(5)
+  consumedAt          DateTime?
+  lastSentAt          DateTime  @default(now())
+  resendCount         Int       @default(0)
+  resendWindowStart   DateTime  @default(now())
+  resetTokenHash      String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([email, purpose])
+  @@index([expiresAt])
+}
+
 model Donation {
   id                  String    @id @default(cuid())
   userId              String?

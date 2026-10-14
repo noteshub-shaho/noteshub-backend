@@ -1,7 +1,8 @@
 import express from "express";
 import {
   registerUser,
-  verification,
+  verifySignupOtp,
+  resendSignupOtp,
   loginUser,
   logoutUser,
   forgotPassword,
@@ -15,18 +16,30 @@ import {
   registerSchema,
   loginSchema,
   resetPasswordSchema,
+  resetPasswordWithTokenSchema,
+  emailSchema,
+  signupOtpSchema,
   validate,
 } from "../validators/userValidate.js";
+import {
+  getMe,
+  refreshAccessToken,
+  updateProfile,
+} from "../controllers/sessionController.js";
 
 const router = express.Router();
 
 router.post("/register", validate(registerSchema), registerUser);
-router.get("/verify/:token", verification);
+router.post("/verify-signup-otp", validate(signupOtpSchema), verifySignupOtp);
+router.post("/resend-signup-otp", validate(emailSchema), resendSignupOtp);
 router.post("/login", validate(loginSchema), loginUser);
 router.post("/logout", isAuthenticated, logoutUser);
-router.post("/forgot-password", forgotPassword);
+router.post("/refresh", refreshAccessToken);
+router.get("/me", isAuthenticated, getMe);
+router.put("/profile", isAuthenticated, updateProfile);
+router.post("/forgot-password", validate(emailSchema), forgotPassword);
 router.post("/verify-otp/:email", verifyOTP);
-router.post("/change-password/:email", validate(resetPasswordSchema), changePassword);
+router.post("/change-password/:email", validate(resetPasswordWithTokenSchema), changePassword);
 
 router.post("/contact", sendContactMail);
 

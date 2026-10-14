@@ -41,6 +41,31 @@ export const resetPasswordSchema = yup.object({
     .required("Confirm password is required"),
 });
 
+export const resetPasswordWithTokenSchema = resetPasswordSchema.shape({
+  resetToken: yup
+    .string()
+    .required("Password reset verification is required"),
+});
+
+export const emailSchema = yup.object({
+  email: yup
+    .string()
+    .email("Email is not valid")
+    .required("Email is required"),
+});
+
+export const signupOtpSchema = yup.object({
+  email: yup
+    .string()
+    .email("Email is not valid")
+    .required("Email is required"),
+
+  otp: yup
+    .string()
+    .matches(/^\d{6}$/, "OTP must be 6 digits")
+    .required("OTP is required"),
+});
+
 export const validate = (schema) => async (req, res, next) => {
   try {
     await schema.validate(req.body, { abortEarly: false });
