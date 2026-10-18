@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 
-function publicUser(user) {
+export function publicUser(user) {
   return {
     id: user.id,
     username: user.username,
@@ -9,6 +9,8 @@ function publicUser(user) {
     termsAccepted: user.termsAccepted,
     isVerified: user.isVerified,
     authProvider: user.authProvider,
+    profilePhotoUrl: user.profilePhotoUrl ?? null,
+    canChangePassword: Boolean(user.password),
     createdAt: user.createdAt,
   };
 }

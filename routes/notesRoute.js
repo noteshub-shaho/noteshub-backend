@@ -1,9 +1,13 @@
 import express from "express";
-import { getNotes } from "../controllers/notesController.js";
+import { getNotes, getNotesManifest } from "../controllers/notesController.js";
 import { mergePdfs } from "../controllers/mergeController.js";
 import { isAuthenticated } from "../middleware/isAuthenticated.js";
 
 const router = express.Router();
+
+// Must be registered before the /:university/:semester/:subject catch-all,
+// otherwise "manifest" would be parsed as a university.
+router.get("/manifest", getNotesManifest);
 
 router.get("/merge/:university/:semester/:subject", mergePdfs);
 router.get("/merge/:university/:semester/:subject/:subSubject", mergePdfs);

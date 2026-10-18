@@ -1,8 +1,10 @@
 import { v2 as cloudinary } from "cloudinary";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import prisma from "../lib/prisma.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -10,6 +12,35 @@ const supabase = createClient(
 );
 
 const MAX_CLOUDINARY_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Persist the SHA-256 content hash (and provider version token) for an
+ * uploaded note PDF so the sync manifest never has to re-download it to
+ * learn its hash. Must be kept in sync with the version tokens used by
+ * services/notesManifestService.js.
+ */
+async function persistUploadedNoteAsset({ provider, publicId, filename, folder, fileBuffer, version, url }) {
+  try {
+    const hash = `sha256:${crypto.createHash("sha256").update(fileBuffer).digest("hex")}`;
+    const data = {
+      filename,
+      folder,
+      bytes: fileBuffer.length,
+      version,
+      hash,
+      url,
+    };
+    await prisma.noteAsset.upsert({
+      where: { provider_publicId: { provider, publicId } },
+      create: { provider, publicId, ...data },
+      update: data,
+    });
+  } catch (error) {
+    // Never fail the upload over hash bookkeeping — the manifest backfills
+    // missing hashes lazily on first listing.
+    console.error("NoteAsset hash persist failed:", error.message);
+  }
+}
 
 export const adminUpload = async (req, res) => {
   try {
@@ -34,6 +65,16 @@ export const adminUpload = async (req, res) => {
 
       fs.unlinkSync(tempPath);
 
+      await persistUploadedNoteAsset({
+        provider: "cloudinary",
+        publicId: result.public_id,
+        filename: fileName,
+        folder,
+        fileBuffer,
+        version: result.version != null ? `v${result.version}` : null,
+        url: result.secure_url,
+      });
+
       return res.status(200).json({
         success: true,
         message: "Uploaded to Cloudinary",
@@ -53,6 +94,30 @@ export const adminUpload = async (req, res) => {
       if (error) throw error;
 
       const { data } = supabase.storage.from("notes").getPublicUrl(supabasePath);
+
+      // Read back the stored object's metadata so the version token matches
+      // what the manifest listing will compute on its next pass.
+      let supabaseVersion = null;
+      try {
+        const parentDir = folder || "";
+        const { data: items } = await supabase.storage.from("notes").list(parentDir, { limit: 100 });
+        const item = (items || []).find((i) => i.name === fileName);
+        if (item?.updated_at) {
+          supabaseVersion = `${item.updated_at}|${item.metadata?.size ?? fileSize}`;
+        }
+      } catch {
+        /* version lookup is best-effort */
+      }
+
+      await persistUploadedNoteAsset({
+        provider: "supabase",
+        publicId: supabasePath,
+        filename: fileName,
+        folder,
+        fileBuffer,
+        version: supabaseVersion,
+        url: data.publicUrl,
+      });
 
       return res.status(200).json({
         success: true,

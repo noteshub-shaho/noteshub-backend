@@ -14,6 +14,15 @@ import {
   resendCooldownRemaining,
   verifyOtpCode,
 } from "../utils/otpService.js";
+import {
+  buildSubjectLine,
+  contactBlocked,
+  escapeHtml,
+  normalizeCategory,
+  senderIdentity,
+  singleLine,
+  supportInbox,
+} from "../services/contactMailService.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -471,41 +480,61 @@ export const changePassword = async (req, res) => {
 
 export const sendContactMail = async (req, res) => {
   try {
-    const { fullName, email, message } = req.body;
+    const { fullName, email, subject, category, message } = req.body;
 
-    if (!fullName || !email || !message) {
-      return res.status(400).json({
+    const rate = contactBlocked(req, email);
+    if (rate.blocked) {
+      return res.status(429).json({
         success: false,
-        message: "All fields required",
+        message: rate.message,
+        retryAfterSeconds: rate.retryAfterSeconds,
       });
     }
 
-    const brevo = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
+    const senderEmail = senderIdentity();
+    if (!senderEmail) {
+      return res.status(500).json({ success: false, message: "Support email is not configured" });
+    }
+
+    const safeName = singleLine(fullName, 80);
+    const safeEmail = singleLine(email, 120);
+    const safeMessage = message ? escapeHtml(message).replace(/\r?\n/g, "<br>") : "";
+
+    const brevo = new BrevoClient({
+      apiKey: process.env.BREVO_API_KEY,
+      timeoutInSeconds: 30,
+      maxRetries: 2,
+    });
 
     await brevo.transactionalEmails.sendTransacEmail({
       sender: {
         name: "NotesHub",
-        email: process.env.NOTESHUB_SENDER_EMAIL,
+        email: senderEmail,
       },
-      to: [{ email: process.env.NOTESHUB_SENDER_EMAIL }],
-      replyTo: { email, name: fullName },
-      subject: `New Contact Message from ${fullName}`,
+      to: [{ email: supportInbox() }],
+      replyTo: { email: safeEmail, name: safeName },
+      subject: buildSubjectLine({ category, subject }),
       htmlContent: `
-        <h2>New Contact Message</h2>
-        <p><b>Name:</b> ${fullName}</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Message:</b> ${message}</p>
+        <p><b>Name:</b> ${escapeHtml(safeName)}</p>
+        <p><b>Email:</b> ${escapeHtml(safeEmail)}</p>
+        <p><b>Category:</b> ${escapeHtml(normalizeCategory(category))}</p>
+        <p><b>Message:</b></p>
+        <p>${safeMessage}</p>
       `,
     });
 
     return res.status(200).json({
       success: true,
-      message: "Mail sent successfully",
+      message: "Message sent. Our team will reply to you by email.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Mail sending failed",
-    });
+    const status = error?.statusCode ?? error?.status;
+    if (status === 401) {
+      return res.status(502).json({ success: false, message: "Email service is not configured correctly" });
+    }
+    if (status === 429) {
+      return res.status(429).json({ success: false, message: "Too many messages right now. Try again later." });
+    }
+    return res.status(502).json({ success: false, message: "Could not send your message right now. Try again shortly." });
   }
 };

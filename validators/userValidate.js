@@ -66,6 +66,39 @@ export const signupOtpSchema = yup.object({
     .required("OTP is required"),
 });
 
+export const contactSchema = yup.object({
+  fullName: yup
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(80, "Name is too long")
+    .required("Name is required"),
+
+  email: yup
+    .string()
+    .trim()
+    .email("Email is not valid")
+    .required("Email is required"),
+
+  subject: yup
+    .string()
+    .trim()
+    .max(120, "Subject is too long")
+    .notRequired(),
+
+  category: yup
+    .string()
+    .trim()
+    .max(40, "Category is too long")
+    .notRequired(),
+
+  message: yup
+    .string()
+    .trim()
+    .max(4000, "Message must be 4000 characters or fewer")
+    .notRequired(),
+});
+
 export const validate = (schema) => async (req, res, next) => {
   try {
     await schema.validate(req.body, { abortEarly: false });

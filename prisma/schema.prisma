@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -19,6 +20,8 @@ model User {
   otp           String?
   otpExpiry     DateTime?
   termsAccepted Boolean   @default(false)
+  profilePhotoUrl      String?
+  profilePhotoPublicId String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -122,6 +125,30 @@ model NoteEntitlement {
   registeredDevice RegisteredDevice?
 
   @@unique([userId, noteKey])
+}
+
+// Content-addressed metadata for note PDFs stored in Cloudinary / Supabase
+// Storage. Notes themselves live in provider asset folders (see
+// config/academic.js); this table caches a verified SHA-256 content hash per
+// asset version so the manifest endpoint can serve stable hashes without
+// re-downloading PDFs on every request. `hash` stays null until a content
+// hash is computed (upload time or first manifest backfill) — clients must
+// treat null as "unverified", never as a match.
+model NoteAsset {
+  id        String   @id @default(cuid())
+  provider  String // "cloudinary" | "supabase"
+  publicId  String // Cloudinary public_id or Supabase object path
+  filename  String // display name shown to clients
+  folder    String // "university/semester/subject[/subSubject]"
+  bytes     Int?
+  version   String? // provider version token (Cloudinary version, Supabase updated_at|size)
+  hash      String? // "sha256:<hex>" of the actual PDF bytes
+  url       String? // last known delivery URL (regenerated per manifest response)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, publicId])
+  @@index([folder])
 }
 
 model RegisteredDevice {
